@@ -15,7 +15,7 @@ void error(const char *msg) {
 int main(int argc, char *argv[]) {
 	int listenSocketFD, establishedConnectionFD, portNumber, charsRead;
 	socklen_t sizeOfClientInfo;
-  int bufferSize = 10000, dataFragmentSize = 10;
+  int bufferSize = 75000, dataFragmentSize = 10;
 	char buffer[bufferSize], dataFragment[dataFragmentSize];
   char connectionValidator[] = ">>";
   char endOfMessage[] = "||";
