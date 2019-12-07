@@ -8,16 +8,16 @@
 #include <netinet/in.h>
 
 // Error function used for reporting issues
-void error(const char *msg) {
+void error(const char* msg) {
   perror(msg);
   exit(1);
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
 	int listenSocketFD, establishedConnectionFD, portNumber, charsRead;
 	int exitMethod = -5;
 	socklen_t sizeOfClientInfo;
-  int bufferSize = 75000, dataFragmentSize = 10;
+  int bufferSize = 100000, dataFragmentSize = 10;
 	char buffer[bufferSize], dataFragment[dataFragmentSize];
   char connectionValidator[] = ">>";
   char endOfMessage[] = "||";
@@ -44,7 +44,7 @@ int main(int argc, char *argv[]) {
 	  error("An error occurred opening a socket");
 
 	// Enable the socket to begin listening
-	if (bind(listenSocketFD, (struct sockaddr *) &serverAddress, sizeof(serverAddress)) < 0)
+	if (bind(listenSocketFD, (struct sockaddr*) &serverAddress, sizeof(serverAddress)) < 0)
 		error("An error occurred binding to a socket");
 
   // Flip the socket on - it can now receive up to 5 connections
@@ -55,7 +55,7 @@ int main(int argc, char *argv[]) {
     // Get the size of the address for the client that will connect
     sizeOfClientInfo = sizeof(clientAddress);
     // Accept a connection, blocking if one is not available until one connects
-    establishedConnectionFD = accept(listenSocketFD, (struct sockaddr *) &clientAddress, &sizeOfClientInfo);
+    establishedConnectionFD = accept(listenSocketFD, (struct sockaddr*) &clientAddress, &sizeOfClientInfo);
     if (establishedConnectionFD < 0)
       error("An error occurred accepting a connection");
 
@@ -117,6 +117,7 @@ int main(int argc, char *argv[]) {
           }
         }
         printf("Key: %s\n", keyRead);
+
 
 
         // Close the existing socket which is connected to the client
