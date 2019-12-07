@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/wait.h>
 #include <netinet/in.h>
 
 // Error function used for reporting issues
@@ -14,6 +15,7 @@ void error(const char *msg) {
 
 int main(int argc, char *argv[]) {
 	int listenSocketFD, establishedConnectionFD, portNumber, charsRead;
+	int exitMethod = -5;
 	socklen_t sizeOfClientInfo;
   int bufferSize = 75000, dataFragmentSize = 10;
 	char buffer[bufferSize], dataFragment[dataFragmentSize];
@@ -66,6 +68,7 @@ int main(int argc, char *argv[]) {
         // Get the message from the client
         memset(buffer, '\0', bufferSize);
         char* keyRead;
+        int linesRead = 0;
 
         // Read the client's message from the socket
         charsRead = recv(establishedConnectionFD, buffer, sizeof(buffer) - 1, 0);
@@ -90,10 +93,12 @@ int main(int argc, char *argv[]) {
         while (strstr(buffer, endOfMessage) == NULL) {
           memset(dataFragment, '\0', sizeof(dataFragment));
           charsRead = recv(establishedConnectionFD, dataFragment, sizeof(dataFragment) - 1, 0);
+
           if (charsRead == 0)
             break;
           if (charsRead == -1)
             break;
+
           strcat(buffer, dataFragment);
 
           printf("Received fragment: %s\nMessage so far: %s\n", dataFragment, buffer);
@@ -104,12 +109,21 @@ int main(int argc, char *argv[]) {
         int terminalLocation = strstr(buffer, endOfMessage) - buffer;
         buffer[terminalLocation] = '\0';
         printf("Complete Message: \"%s\"\n", buffer);
+        for (int i = 0; i < strlen(buffer); i++) {
+          if (buffer[i] == '\n') {
+            linesRead++;
+            keyRead = buffer + i + 1;
+            break;
+          }
+        }
+        printf("Key: %s\n", keyRead);
 
 
         // Close the existing socket which is connected to the client
         close(establishedConnectionFD);
 
       default:
+        spawnPid = waitpid(-1, &exitMethod, WNOHANG);
         // Close the existing socket which is connected to the client
         close(establishedConnectionFD);
     }
@@ -119,14 +133,4 @@ int main(int argc, char *argv[]) {
   // Close the listening socket
   close(listenSocketFD);
   return(0);
-
-	printf("SERVER: I received this from the client: \"%s\"\n", buffer);
-
-	// Send a Success message back to the client
-	charsRead = send(establishedConnectionFD, "I am the server, and I got your message", 39, 0); // Send success back
-	if (charsRead < 0)
-	  error("ERROR writing to socket");
-
-	close(establishedConnectionFD);
-	close(listenSocketFD);
 }
