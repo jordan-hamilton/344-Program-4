@@ -9,14 +9,12 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-// Error function used for reporting issues
-void error(const char *msg) {
-  perror(msg);
-  exit(0);
-}
+void error(const char* msg);
+void fileToBuffer(const int*, char[], const int*);
+void stringToSocket(const int*, const char[]);
 
 int main(int argc, char *argv[]) {
-  int socketFD, portNumber, charsWritten, charsRead;
+  int socketFD, portNumber, charsRead;
   int plaintextFD, plaintextLength, keyFD, keyLength;
   struct sockaddr_in serverAddress;
   struct hostent* serverHostInfo;
@@ -55,25 +53,7 @@ int main(int argc, char *argv[]) {
     error("An error occurred connecting to the server");
 
   // Send message to server
-  charsWritten = send(socketFD, connectionValidator, strlen(connectionValidator), 0); // Write to the server
-  if (charsWritten < 0)
-    error("An error occurred writing to the socket");
-
-  while (charsWritten < strlen(connectionValidator)) {
-    int addedChars = 0;
-    // Write to the server again, starting from one character after the most recently sent character
-    addedChars = send(socketFD, connectionValidator + charsWritten, strlen(connectionValidator) - charsWritten, 0);
-    if (addedChars < 0)
-      error("An error occurred writing to the socket");
-
-    // Exit the loop if no more characters are being sent to the server.
-    if (addedChars == 0) {
-      break;
-    }
-
-    // Add the number of characters written in an iteration to the total number of characters sent in the message
-    charsWritten += addedChars;
-  }
+  stringToSocket(&socketFD, connectionValidator);
 
   // Get return message from server
   memset(buffer, '\0', sizeof(buffer)); // Clear out the buffer
@@ -91,20 +71,20 @@ int main(int argc, char *argv[]) {
     plaintextFD = open(argv[1], O_RDONLY);
     if (plaintextFD < 0)
       error("Could not open the specified plaintext file");
-    /* Set the length equal to the size of the file
+    /* Set the length of the provided plaintext equal to the size of the file
      * (source: https://stackoverflow.com/questions/174531/how-to-read-the-content-of-a-file-to-a-string-in-c). */
-    plaintextLength = lseek(plaintextFD, 0, SEEK_END) - 1;
+    plaintextLength = lseek(plaintextFD, 0, SEEK_END);
 
     // Repeat the above steps for our key to get its size.
     keyFD = open(argv[2], O_RDONLY);
     if (keyFD < 0)
       error("Could not open the specified key file");
-    keyLength = lseek(keyFD, 0, SEEK_END) - 1;
+    keyLength = lseek(keyFD, 0, SEEK_END);
 
     // Print an error message and exit if the key is too short to use.
     if (keyLength < plaintextLength) {
       fprintf(stderr, "The provided key does not meet the minimum length requirements to "
-                      "encrypt your message.\nPlease provide a key with a length of %d or more.\n", plaintextLength);
+                      "encrypt your message.\nPlease provide a key with a length of %d or more.\n", plaintextLength - 1);
       exit(1);
     }
 
@@ -117,42 +97,66 @@ int main(int argc, char *argv[]) {
       }
     }
 
-    // Get input message from user
-    printf("CLIENT: Enter text to send to the server, and then hit enter: ");
-    memset(buffer, '\0', sizeof(buffer)); // Clear out the buffer array
-    fgets(buffer, sizeof(buffer) - 1, stdin); // Get input from the user, trunc to buffer - 1 chars, leaving \0
-    buffer[strcspn(buffer, "\n")] = '\0'; // Remove the trailing \n that fgets adds
+    memset(buffer, '\0', sizeof(buffer));
+    fileToBuffer(&plaintextFD, buffer, &plaintextLength);
+    close(plaintextFD);
+    stringToSocket(&socketFD, buffer);
 
-    // Send message to server
-    charsWritten = send(socketFD, buffer, strlen(buffer), 0); // Write to the server
-    if (charsWritten < 0)
-      error("An error occurred writing to the socket");
+    memset(buffer, '\0', sizeof(buffer));
+    fileToBuffer(&keyFD, buffer, &keyLength);
+    close(keyFD);
+    stringToSocket(&socketFD, buffer);
 
-    while (charsWritten < strlen(buffer)) {
-      int addedChars = 0;
-      // Write to the server again, starting from one character after the most recently sent character
-      addedChars = send(socketFD, buffer + charsWritten, strlen(buffer) - charsWritten, 0);
-      if (addedChars < 0)
-        error("An error occurred writing to the socket");
+    stringToSocket(&socketFD, endOfMessage);
 
-      // Exit the loop if no more characters are being sent to the server.
-      if (addedChars == 0) {
-        break;
-      }
-
-      // Add the number of characters written in an iteration to the total number of characters sent in the message
-      charsWritten += addedChars;
-    }
-
-    // Get return message from server
+    /* Get return message from server
     memset(buffer, '\0', sizeof(buffer)); // Clear out the buffer again for reuse
     charsRead = recv(socketFD, buffer, sizeof(buffer) - 1, 0); // Read data from the socket, leaving \0 at end
     if (charsRead < 0)
       error("An error occurred reading from the socket");
-    fprintf(stdout, "%s\n", buffer);
+    fprintf(stdout, "%s\n", buffer);*/
   }
 
   close(socketFD); // Close the socket
 
   return(0);
+}
+
+// Error function used for reporting issues
+void error(const char *msg) {
+  perror(msg);
+  exit(0);
+}
+
+void fileToBuffer(const int* fileDescriptor, char buffer[], const int* fileLength) {
+  int bytesRead = -5;
+  lseek(*fileDescriptor, 0, SEEK_SET);
+  bytesRead = read(*fileDescriptor, buffer, *fileLength);
+  if (bytesRead < 0)
+    error("An error occurred trying to read file contents");
+  printf("String: \"%s\"\nString Length: %lu\n", buffer, strlen(buffer));
+}
+
+void stringToSocket(const int* socketFD, const char message[]) {
+  int charsWritten;
+  // Send message to server
+  charsWritten = send(*socketFD, message, strlen(message), 0); // Write to the server
+  if (charsWritten < 0)
+    error("An error occurred writing to the socket");
+
+  while (charsWritten < strlen(message)) {
+    int addedChars = 0;
+    // Write to the server again, starting from one character after the most recently sent character
+    addedChars = send(*socketFD, message + charsWritten, strlen(message) - charsWritten, 0);
+    if (addedChars < 0)
+      error("An error occurred writing to the socket");
+
+    // Exit the loop if no more characters are being sent to the server.
+    if (addedChars == 0) {
+      break;
+    }
+
+    // Add the number of characters written in an iteration to the total number of characters sent in the message
+    charsWritten += addedChars;
+  }
 }
