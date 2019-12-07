@@ -12,15 +12,15 @@
 void error(const char* msg);
 void fileToBuffer(const int*, char[], const int*);
 void stringToSocket(const int*, const char[]);
+void validateString(const char[]);
 
 int main(int argc, char *argv[]) {
   int socketFD, portNumber, charsRead;
   int plaintextFD, plaintextLength, keyFD, keyLength;
   struct sockaddr_in serverAddress;
   struct hostent* serverHostInfo;
-  int bufferSize = 75000;
+  int bufferSize = 100000;
   char buffer[bufferSize];
-  char stringValidator[2];
   char connectionValidator[] = ">>";
   char endOfMessage[] = "||";
 
@@ -88,6 +88,9 @@ int main(int argc, char *argv[]) {
       exit(1);
     }
 
+    /* Clear out a buffer for reading one character at a time, then use a while loop starting from the beginning of the
+     * file to store one character at a time, ensuring that the character is either a space or uppercase letter. Exit
+     * the loop once read returns 0 at the end of the file.
     memset(stringValidator, '\0', sizeof(stringValidator));
     lseek(plaintextFD, 0, SEEK_SET);
     while (read(plaintextFD, stringValidator, 1) != 0) {
@@ -95,11 +98,12 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "One or more invalid characters were supplied in the plaintext message: %c.\n", stringValidator[0]);
         exit(1);
       }
-    }
+    }*/
 
     memset(buffer, '\0', sizeof(buffer));
     fileToBuffer(&plaintextFD, buffer, &plaintextLength);
     close(plaintextFD);
+    validateString(buffer);
     stringToSocket(&socketFD, buffer);
 
     memset(buffer, '\0', sizeof(buffer));
@@ -123,11 +127,13 @@ int main(int argc, char *argv[]) {
 }
 
 // Error function used for reporting issues
-void error(const char *msg) {
+void error(const char* msg) {
   perror(msg);
   exit(0);
 }
 
+/* Takes a file descriptor pointer, a buffer to store the file's contents and a pointer to the length of the file,
+ * then uses the read function to store the provided number of bytes from the file into the buffer. */
 void fileToBuffer(const int* fileDescriptor, char buffer[], const int* fileLength) {
   int bytesRead = -5;
   lseek(*fileDescriptor, 0, SEEK_SET);
@@ -137,6 +143,8 @@ void fileToBuffer(const int* fileDescriptor, char buffer[], const int* fileLengt
   printf("String: \"%s\"\nString Length: %lu\n", buffer, strlen(buffer));
 }
 
+/* Takes a pointer to a socket, followed by a string to send via that socket,
+ * then loops to ensure all the data in the string is sent. */
 void stringToSocket(const int* socketFD, const char message[]) {
   int charsWritten;
   // Send message to server
@@ -159,4 +167,17 @@ void stringToSocket(const int* socketFD, const char message[]) {
     // Add the number of characters written in an iteration to the total number of characters sent in the message
     charsWritten += addedChars;
   }
+}
+
+/* Takes a string then uses a loop starting from the beginning of the string to check one character at a time,
+ * ensuring that the character is either a space or uppercase letter. Exits the loop at the end of the string
+ * or exits the program when an invalid character is found that can't be sent to our daemon. */
+void validateString(const char buffer[]) {
+  for (int i = 0; i < strlen(buffer); i++) {
+    if (!isupper(buffer[i]) && !isspace(buffer[i])) {
+      fprintf(stderr, "One or more invalid characters were supplied in the plaintext message.\n");
+      exit(1);
+    }
+  }
+  fprintf(stdout, "Looks good!\n");
 }
