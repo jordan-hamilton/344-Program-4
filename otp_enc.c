@@ -56,14 +56,19 @@ int main(int argc, char *argv[]) {
     exit(1);
   }
 
+  /* Store the message in our buffer, then pass the buffer to isValidString to make sure that the message has
+   * characters that can be encrypted */
   memset(buffer, '\0', sizeof(buffer));
   fileToBuffer(&plaintextFD, buffer, &plaintextLength);
   validText = isValidString(buffer);
 
+  /* Store the key in our buffer, then pass the buffer to isValidString to make sure that the message has
+ * characters that can be used to encrypt our message */
   memset(buffer, '\0', sizeof(buffer));
   fileToBuffer(&keyFD, buffer, &keyLength);
   validKey = isValidString(buffer);
 
+  // Print an error message and exit before attempting to connect if either the message or key were invalid
   if (!validText || !validKey) {
     fprintf(stderr, "One or more invalid characters were detected.\n");
     close(plaintextFD);
@@ -101,7 +106,7 @@ int main(int argc, char *argv[]) {
   receiveStringFromSocket(&socketFD, buffer, messageFragment, &messageFragmentSize, endOfMessage);
 
   if (strcmp(buffer, connectionValidator) != 0) {
-    // Close the socket
+    // Close the socket and clean up since the message received suggests this wasn't the right daemon
     close(socketFD);
     // Close file descriptors
     close(plaintextFD);
@@ -109,11 +114,13 @@ int main(int argc, char *argv[]) {
     fprintf(stderr, "A connection was made to an unknown destination.\n");
     exit(2);
   } else {
+    // Send the message by storing it in the cleared buffer, closing the file descriptor and sending it through the socket
     memset(buffer, '\0', sizeof(buffer));
     fileToBuffer(&plaintextFD, buffer, &plaintextLength);
     close(plaintextFD);
     sendStringToSocket(&socketFD, buffer);
 
+    // Send the key by storing it in the cleared buffer, closing the file descriptor and sending it through the socket
     memset(buffer, '\0', sizeof(buffer));
     fileToBuffer(&keyFD, buffer, &keyLength);
     close(keyFD);
@@ -126,6 +133,7 @@ int main(int argc, char *argv[]) {
     memset(buffer, '\0', sizeof(buffer)); // Clear out the buffer again for reuse
     receiveStringFromSocket(&socketFD, buffer, messageFragment, &messageFragmentSize, endOfMessage);
 
+    // Output the decrypted result to stdout
     fprintf(stdout, "%s\n", buffer);
   }
 
@@ -150,6 +158,10 @@ void fileToBuffer(const int* fileDescriptor, char buffer[], const int* fileLengt
     error("An error occurred trying to read file contents");
 }
 
+/* Takes a socket, a message buffer, a smaller array to hold characters as they're read, the size of the array, and a
+ * small string used by client and server to indicate the end of a message. The function loops through until the
+ * substring is found, as seen in the Network Clients video for block 4, repeatedly adding the message fragment
+ * to the end of the message. The substring that marks the end of the message is then replaced with a null terminator. */
 void receiveStringFromSocket(const int* establishedConnectionFD, char message[], char messageFragment[], const int* messageFragmentSize, const char endOfMessage[]) {
   int charsRead = -5;
   long terminalLocation = -5;
@@ -158,6 +170,7 @@ void receiveStringFromSocket(const int* establishedConnectionFD, char message[],
     memset(messageFragment, '\0', *messageFragmentSize);
     charsRead = recv(*establishedConnectionFD, messageFragment, *messageFragmentSize - 1, 0);
 
+    // Exit the loop if we either don't read any more characters when receiving, or we failed to retrieve any characters
     if (charsRead == 0)
       break;
     if (charsRead == -1)
@@ -197,12 +210,13 @@ void sendStringToSocket(const int* socketFD, const char message[]) {
   }
 }
 
-/* Takes a string then uses a loop starting from the beginning of the string to check one character at a time,
- * ensuring that the character is either a space or uppercase letter. Exits the loop at the end of the string
- * or exits the program when an invalid character is found that can't be sent to our daemon. */
+/* Takes a string, then uses a loop starting from the beginning of the string to check one character at a time,
+ * ensuring that the character is either a space or uppercase letter. Exits the loop and returns true at the end
+ * of the string, or returns false when an invalid character is found that can't be sent to our daemon. */
 int isValidString(const char buffer[]) {
   for (int i = 0; i < strlen(buffer); i++) {
     if (!isupper(buffer[i]) && !isspace(buffer[i])) {
+      // Return false immediately if any character
       return(0);
     }
   }

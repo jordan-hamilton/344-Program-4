@@ -80,13 +80,12 @@ int main(int argc, char* argv[]) {
           sendStringToSocket(&establishedConnectionFD, invalidError);
           sendStringToSocket(&establishedConnectionFD, endOfMessage);
         } else {
-          // Send back the connection validator string if the connection came from otp_dec
+          // Send back the connection validator and end of message string if the connection came from otp_enc
           sendStringToSocket(&establishedConnectionFD, "<<||");
         }
 
-        // Prepare the buffer to receive the full message from the client
+        // Prepare the buffer and receive the full encrypted message and key from the client
         memset(buffer, '\0', sizeof(buffer));
-
         receiveStringFromSocket(&establishedConnectionFD, buffer, messageFragment, &messageFragmentSize, endOfMessage);
 
         /* Our key in the buffer begins after the newline character at the end of the ciphertext message,
@@ -115,6 +114,7 @@ int main(int argc, char* argv[]) {
         close(establishedConnectionFD);
 
       default:
+        // Try to reap any zombie child processes
         spawnPid = waitpid(-1, &exitMethod, WNOHANG);
         // Close the existing socket which is connected to the client
         close(establishedConnectionFD);
@@ -127,6 +127,10 @@ int main(int argc, char* argv[]) {
   return(0);
 }
 
+/* Takes a string, the string's message length, and a key, then translates the ASCII value of each character
+ * into a number between 0 and 26. The message character's value is subtracted by the key character's value
+ * (adding 27 if we get a negative result from subtraction) then modular arithmetic decrypts the result.
+ * Finally, we translate each character back into an ASCII value and add a null terminator to the end of the string. */
 void decrypt(char message[], const unsigned long messageLength, const char key[]) {
   int ciphertextValue = -1, keyValue = -1, decryptedValue = -1;
 
@@ -162,6 +166,10 @@ void error(const char* msg) {
   exit(1);
 }
 
+/* Takes a socket, a message buffer, a smaller array to hold characters as they're read, the size of the array, and a
+ * small string used by client and server to indicate the end of a message. The function loops through until the
+ * substring is found, as seen in the Network Clients video for block 4, repeatedly adding the message fragment
+ * to the end of the message. The substring that marks the end of the message is then replaced with a null terminator. */
 void receiveStringFromSocket(const int* establishedConnectionFD, char message[], char messageFragment[], const int* messageFragmentSize, const char endOfMessage[]) {
   int charsRead = -5;
   long terminalLocation = -5;
@@ -170,6 +178,7 @@ void receiveStringFromSocket(const int* establishedConnectionFD, char message[],
     memset(messageFragment, '\0', *messageFragmentSize);
     charsRead = recv(*establishedConnectionFD, messageFragment, *messageFragmentSize - 1, 0);
 
+    // Exit the loop if we either don't read any more characters when receiving, or we failed to retrieve any characters
     if (charsRead == 0)
       break;
     if (charsRead == -1)
