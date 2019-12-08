@@ -13,21 +13,66 @@ void error(const char* msg);
 void fileToBuffer(const int*, char[], const int*);
 void receiveStringFromSocket(const int*, char[], char[], const int*, const char[]);
 void sendStringToSocket(const int*, const char[]);
-void validateString(const char[]);
+int isValidString(const char[]);
 
 int main(int argc, char *argv[]) {
   int socketFD, portNumber;
-  int plaintextFD, plaintextLength, keyFD, keyLength;
+  int ciphertextFD, ciphertextLength, keyFD, keyLength;
+  int validText = 0, validKey = 0;
   struct sockaddr_in serverAddress;
   struct hostent* serverHostInfo;
-  int bufferSize = 100000, messageFragmentSize = 10;
+  int bufferSize = 150000, messageFragmentSize = 10;
   char buffer[bufferSize], messageFragment[messageFragmentSize];
-  char connectionValidator[] = ">>";
+  char connectionValidator[] = "<<";
   char endOfMessage[] = "||";
 
   // Check usage & args
   if (argc < 4) {
-    fprintf(stderr, "Correct command format: %s PLAINTEXT KEY PORT\n", argv[0]);
+    fprintf(stderr, "Correct command format: %s CIPHERTEXT KEY PORT\n", argv[0]);
+    exit(2);
+  }
+
+  /* Open the specified ciphertext and key files, checking for existence and setting the length of each file in
+   * bytes so we can verify the key we'll send to the daemon is long enough to decrypt the ciphertext message. */
+  ciphertextFD = open(argv[1], O_RDONLY);
+  if (ciphertextFD < 0)
+    error("Could not open the specified ciphertext file");
+  /* Set the length of the provided ciphertext equal to the size of the file
+   * (source: https://stackoverflow.com/questions/174531/how-to-read-the-content-of-a-file-to-a-string-in-c). */
+  ciphertextLength = lseek(ciphertextFD, 0, SEEK_END);
+
+  // Repeat the above steps for our key to get its size.
+  keyFD = open(argv[2], O_RDONLY);
+  if (keyFD < 0)
+    error("Could not open the specified key file");
+  keyLength = lseek(keyFD, 0, SEEK_END);
+
+  // Print an error message and exit if the key is too short to use.
+  if (keyLength < ciphertextLength) {
+    fprintf(stderr, "The provided key does not meet the minimum length requirements to "
+                    "decrypt your message.\nPlease provide a key with a length of %d or more.\n", ciphertextLength - 1);
+    close(ciphertextFD);
+    close(keyFD);
+    exit(1);
+  }
+
+  /* Store the encrypted message in our buffer, then pass the buffer to isValidString to make sure that the message has
+ * characters that can be decrypted */
+  memset(buffer, '\0', sizeof(buffer));
+  fileToBuffer(&ciphertextFD, buffer, &ciphertextLength);
+  validText = isValidString(buffer);
+
+  /* Store the key in our buffer, then pass the buffer to isValidString to make sure that the message has
+* characters that can be used to decrypt our message */
+  memset(buffer, '\0', sizeof(buffer));
+  fileToBuffer(&keyFD, buffer, &keyLength);
+  validKey = isValidString(buffer);
+
+  // Print an error message and exit before attempting to connect if either the message or key were invalid
+  if (!validText || !validKey) {
+    fprintf(stderr, "One or more invalid characters were detected.\n");
+    close(ciphertextFD);
+    close(keyFD);
     exit(1);
   }
 
@@ -40,7 +85,7 @@ int main(int argc, char *argv[]) {
 
   if (serverHostInfo == NULL) {
     fprintf(stderr, "An error occurred defining a server address.\n");
-    exit(0);
+    exit(2);
   }
   memcpy((char*) &serverAddress.sin_addr.s_addr, (char*) serverHostInfo->h_addr, serverHostInfo->h_length); // Copy in the address
 
@@ -54,63 +99,41 @@ int main(int argc, char *argv[]) {
     error("An error occurred connecting to the server");
 
   // Send message to server
-  sendStringToSocket(&socketFD, ">>||");
+  sendStringToSocket(&socketFD, "<<||");
 
   // Get return message from server
   memset(buffer, '\0', sizeof(buffer)); // Clear out the buffer
   receiveStringFromSocket(&socketFD, buffer, messageFragment, &messageFragmentSize, endOfMessage);
-  /*charsRead = recv(socketFD, buffer, sizeof(buffer) - 1, 0); // Read data from the socket, leaving \0 at end
-  if (charsRead < 0)
-    error("An error occurred reading from the socket");*/
 
   if (strcmp(buffer, connectionValidator) != 0) {
+    // Close the socket and clean up since the message received suggests this wasn't the right daemon
+    close(socketFD);
+    // Close file descriptors
+    close(ciphertextFD);
+    close(keyFD);
     fprintf(stderr, "A connection was made to an unknown destination.\n");
-    exit(1);
+    exit(2);
   } else {
-
-    /* Open the specified plaintext and key files, checking for existence and setting the length of each file in
-     * bytes so we can verify the key we'll send to the daemon is long enough to encrypt the plaintext message. */
-    plaintextFD = open(argv[1], O_RDONLY);
-    if (plaintextFD < 0)
-      error("Could not open the specified plaintext file");
-    /* Set the length of the provided plaintext equal to the size of the file
-     * (source: https://stackoverflow.com/questions/174531/how-to-read-the-content-of-a-file-to-a-string-in-c). */
-    plaintextLength = lseek(plaintextFD, 0, SEEK_END);
-
-    // Repeat the above steps for our key to get its size.
-    keyFD = open(argv[2], O_RDONLY);
-    if (keyFD < 0)
-      error("Could not open the specified key file");
-    keyLength = lseek(keyFD, 0, SEEK_END);
-
-    // Print an error message and exit if the key is too short to use.
-    if (keyLength < plaintextLength) {
-      fprintf(stderr, "The provided key does not meet the minimum length requirements to "
-                      "encrypt your message.\nPlease provide a key with a length of %d or more.\n", plaintextLength - 1);
-      exit(1);
-    }
-
+    // Send the ciphertext by storing it in the cleared buffer, closing the file descriptor and sending it through the socket
     memset(buffer, '\0', sizeof(buffer));
-    fileToBuffer(&plaintextFD, buffer, &plaintextLength);
-    close(plaintextFD);
-    validateString(buffer);
+    fileToBuffer(&ciphertextFD, buffer, &ciphertextLength);
+    close(ciphertextFD);
     sendStringToSocket(&socketFD, buffer);
 
+    // Send the key by storing it in the cleared buffer, closing the file descriptor and sending it through the socket
     memset(buffer, '\0', sizeof(buffer));
     fileToBuffer(&keyFD, buffer, &keyLength);
     close(keyFD);
-    validateString(buffer);
     sendStringToSocket(&socketFD, buffer);
 
+    // Indicate to the server that both the ciphertext and key have been sent
     sendStringToSocket(&socketFD, endOfMessage);
 
     // Get return message from server
     memset(buffer, '\0', sizeof(buffer)); // Clear out the buffer again for reuse
     receiveStringFromSocket(&socketFD, buffer, messageFragment, &messageFragmentSize, endOfMessage);
-    /*
-    charsRead = recv(socketFD, buffer, sizeof(buffer) - 1, 0); // Read data from the socket, leaving \0 at end
-    if (charsRead < 0)
-      error("An error occurred reading from the socket");*/
+
+    // Output the decrypted result to stdout
     fprintf(stdout, "%s\n", buffer);
   }
 
@@ -122,7 +145,7 @@ int main(int argc, char *argv[]) {
 // Error function used for reporting issues
 void error(const char* msg) {
   perror(msg);
-  exit(0);
+  exit(2);
 }
 
 /* Takes a file descriptor pointer, a buffer to store the file's contents and a pointer to the length of the file,
@@ -135,6 +158,10 @@ void fileToBuffer(const int* fileDescriptor, char buffer[], const int* fileLengt
     error("An error occurred trying to read file contents");
 }
 
+/* Takes a socket, a message buffer, a smaller array to hold characters as they're read, the size of the array, and a
+ * small string used by client and server to indicate the end of a message. The function loops through until the
+ * substring is found, as seen in the Network Clients video for block 4, repeatedly adding the message fragment
+ * to the end of the message. The substring that marks the end of the message is then replaced with a null terminator. */
 void receiveStringFromSocket(const int* establishedConnectionFD, char message[], char messageFragment[], const int* messageFragmentSize, const char endOfMessage[]) {
   int charsRead = -5;
   long terminalLocation = -5;
@@ -143,6 +170,7 @@ void receiveStringFromSocket(const int* establishedConnectionFD, char message[],
     memset(messageFragment, '\0', *messageFragmentSize);
     charsRead = recv(*establishedConnectionFD, messageFragment, *messageFragmentSize - 1, 0);
 
+    // Exit the loop if we either don't read any more characters when receiving, or we failed to retrieve any characters
     if (charsRead == 0)
       break;
     if (charsRead == -1)
@@ -174,23 +202,22 @@ void sendStringToSocket(const int* socketFD, const char message[]) {
       error("An error occurred writing to the socket");
 
     // Exit the loop if no more characters are being sent to the server.
-    if (addedChars == 0) {
+    if (addedChars == 0)
       break;
-    }
 
     // Add the number of characters written in an iteration to the total number of characters sent in the message
     charsWritten += addedChars;
   }
 }
 
-/* Takes a string then uses a loop starting from the beginning of the string to check one character at a time,
- * ensuring that the character is either a space or uppercase letter. Exits the loop at the end of the string
- * or exits the program when an invalid character is found that can't be sent to our daemon. */
-void validateString(const char buffer[]) {
+/* Takes a string, then uses a loop starting from the beginning of the string to check one character at a time,
+ * ensuring that the character is either a space or uppercase letter. Exits the loop and returns true at the end
+ * of the string, or returns false when an invalid character is found that can't be sent to our daemon. */
+int isValidString(const char buffer[]) {
   for (int i = 0; i < strlen(buffer); i++) {
     if (!isupper(buffer[i]) && !isspace(buffer[i])) {
-      fprintf(stderr, "One or more invalid characters were detected.\n");
-      exit(1);
+      return(0);
     }
   }
+  return(1);
 }

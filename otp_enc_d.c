@@ -16,7 +16,7 @@ int main(int argc, char* argv[]) {
 	int listenSocketFD, establishedConnectionFD, portNumber;
 	socklen_t sizeOfClientInfo;
   struct sockaddr_in serverAddress, clientAddress;
-  int bufferSize = 100000, messageFragmentSize = 10;
+  int bufferSize = 150000, messageFragmentSize = 10;
 	char buffer[bufferSize], messageFragment[messageFragmentSize];
   unsigned long encryptedMessageLength = 0;
 	char* keyRead = NULL;
@@ -57,8 +57,6 @@ int main(int argc, char* argv[]) {
     sizeOfClientInfo = sizeof(clientAddress);
     // Accept a connection, blocking if one is not available until one connects
     establishedConnectionFD = accept(listenSocketFD, (struct sockaddr*) &clientAddress, &sizeOfClientInfo);
-    if (establishedConnectionFD < 0)
-      error("An error occurred accepting a connection");
 
     // Fork a new process for the accepted connection if we didn't detect an error
     spawnPid = fork();
@@ -66,32 +64,26 @@ int main(int argc, char* argv[]) {
       case -1:
         error("An error occurred creating a process to handle a new connection");
       case 0:
+        if (establishedConnectionFD < 0)
+          error("An error occurred accepting a connection");
+
         // Clear the buffer to receive a message from the client
         memset(buffer, '\0', bufferSize);
 
         // Read the client's handshake message from the socket
         receiveStringFromSocket(&establishedConnectionFD, buffer, messageFragment, &messageFragmentSize, endOfMessage);
-        /*charsRead = recv(establishedConnectionFD, buffer, sizeof(buffer) - 1, 0);
-        if (charsRead < 0)
-          error("An error occurred reading from the socket");*/
 
         if (strcmp(buffer, connectionValidator) != 0) {
           // Send back an error message if the wrong program is trying to connect to our daemon
           sendStringToSocket(&establishedConnectionFD, invalidError);
-          /*charsRead = send(establishedConnectionFD, invalidError, sizeof(invalidError), 0);
-          if (charsRead < 0)
-            error("An error occurred writing to the socket");*/
+          sendStringToSocket(&establishedConnectionFD, endOfMessage);
         } else {
-          // Send back the connection validator string if the connection came from otp_enc
+          // Send back the connection validator and end of message string if the connection came from otp_enc
           sendStringToSocket(&establishedConnectionFD, ">>||");
-          /*charsRead = send(establishedConnectionFD, connectionValidator, sizeof(connectionValidator), 0);
-          if (charsRead < 0)
-            error("An error occurred writing to the socket");*/
         }
 
-        // Prepare the buffer to receive the full message from the client
+        // Prepare the buffer and receive the full message and key from the client
         memset(buffer, '\0', sizeof(buffer));
-
         receiveStringFromSocket(&establishedConnectionFD, buffer, messageFragment, &messageFragmentSize, endOfMessage);
 
         /* Our key in the buffer begins after the newline character at the end of the plaintext message,
@@ -120,6 +112,7 @@ int main(int argc, char* argv[]) {
         close(establishedConnectionFD);
 
       default:
+        // Try to reap any zombie child processes
         spawnPid = waitpid(-1, &exitMethod, WNOHANG);
         // Close the existing socket which is connected to the client
         close(establishedConnectionFD);
@@ -132,6 +125,10 @@ int main(int argc, char* argv[]) {
   return(0);
 }
 
+/* Takes a string, the string's message length, and a key, then translates the ASCII value of each character
+ * into a number between 0 and 26. The message character's value is added to the key character's value
+ * then modular arithmetic is used to encrypt the result. Finally, we translate each encrypted character into an
+ * ASCII value and add a null terminator to the end of the string. */
 void encrypt(char message[], const unsigned long messageLength, const char key[]) {
   int plaintextValue = -1, keyValue = -1, encryptedValue = -1;
 
@@ -164,6 +161,10 @@ void error(const char* msg) {
   exit(1);
 }
 
+/* Takes a socket, a message buffer, a smaller array to hold characters as they're read, the size of the array, and a
+ * small string used by client and server to indicate the end of a message. The function loops through until the
+ * substring is found, as seen in the Network Clients video for block 4, repeatedly adding the message fragment
+ * to the end of the message. The substring that marks the end of the message is then replaced with a null terminator. */
 void receiveStringFromSocket(const int* establishedConnectionFD, char message[], char messageFragment[], const int* messageFragmentSize, const char endOfMessage[]) {
   int charsRead = -5;
   long terminalLocation = -5;
@@ -172,6 +173,7 @@ void receiveStringFromSocket(const int* establishedConnectionFD, char message[],
     memset(messageFragment, '\0', *messageFragmentSize);
     charsRead = recv(*establishedConnectionFD, messageFragment, *messageFragmentSize - 1, 0);
 
+    // Exit the loop if we either don't read any more characters when receiving, or we failed to retrieve any characters
     if (charsRead == 0)
       break;
     if (charsRead == -1)
