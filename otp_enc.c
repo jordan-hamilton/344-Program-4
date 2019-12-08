@@ -13,11 +13,12 @@ void error(const char* msg);
 void fileToBuffer(const int*, char[], const int*);
 void receiveStringFromSocket(const int*, char[], char[], const int*, const char[]);
 void sendStringToSocket(const int*, const char[]);
-void validateString(const char[]);
+int isValidString(const char[]);
 
 int main(int argc, char *argv[]) {
   int socketFD, portNumber;
   int plaintextFD, plaintextLength, keyFD, keyLength;
+  int validText = 0, validKey = 0;
   struct sockaddr_in serverAddress;
   struct hostent* serverHostInfo;
   int bufferSize = 100000, messageFragmentSize = 10;
@@ -28,6 +29,45 @@ int main(int argc, char *argv[]) {
   // Check usage & args
   if (argc < 4) {
     fprintf(stderr, "Correct command format: %s PLAINTEXT KEY PORT\n", argv[0]);
+    exit(1);
+  }
+
+  /* Open the specified plaintext and key files, checking for existence and setting the length of each file in
+   * bytes so we can verify the key we'll send to the daemon is long enough to encrypt the plaintext message. */
+  plaintextFD = open(argv[1], O_RDONLY);
+  if (plaintextFD < 0)
+    error("Could not open the specified plaintext file");
+  /* Set the length of the provided plaintext equal to the size of the file
+   * (source: https://stackoverflow.com/questions/174531/how-to-read-the-content-of-a-file-to-a-string-in-c). */
+  plaintextLength = lseek(plaintextFD, 0, SEEK_END);
+
+  // Repeat the above steps for our key to get its size.
+  keyFD = open(argv[2], O_RDONLY);
+  if (keyFD < 0)
+    error("Could not open the specified key file");
+  keyLength = lseek(keyFD, 0, SEEK_END);
+
+  // Print an error message and exit if the key is too short to use.
+  if (keyLength < plaintextLength) {
+    fprintf(stderr, "The provided key does not meet the minimum length requirements to "
+                    "encrypt your message.\nPlease provide a key with a length of %d or more.\n", plaintextLength - 1);
+    close(plaintextFD);
+    close(keyFD);
+    exit(1);
+  }
+
+  memset(buffer, '\0', sizeof(buffer));
+  fileToBuffer(&plaintextFD, buffer, &plaintextLength);
+  validText = isValidString(buffer);
+
+  memset(buffer, '\0', sizeof(buffer));
+  fileToBuffer(&keyFD, buffer, &keyLength);
+  validKey = isValidString(buffer);
+
+  if (!validText || !validKey) {
+    fprintf(stderr, "One or more invalid characters were detected.\n");
+    close(plaintextFD);
+    close(keyFD);
     exit(1);
   }
 
@@ -61,44 +101,25 @@ int main(int argc, char *argv[]) {
   receiveStringFromSocket(&socketFD, buffer, messageFragment, &messageFragmentSize, endOfMessage);
 
   if (strcmp(buffer, connectionValidator) != 0) {
-    close(socketFD); // Close the socket
+    // Close the socket
+    close(socketFD);
+    // Close file descriptors
+    close(plaintextFD);
+    close(keyFD);
     fprintf(stderr, "A connection was made to an unknown destination.\n");
     exit(1);
   } else {
-    /* Open the specified plaintext and key files, checking for existence and setting the length of each file in
-     * bytes so we can verify the key we'll send to the daemon is long enough to encrypt the plaintext message. */
-    plaintextFD = open(argv[1], O_RDONLY);
-    if (plaintextFD < 0)
-      error("Could not open the specified plaintext file");
-    /* Set the length of the provided plaintext equal to the size of the file
-     * (source: https://stackoverflow.com/questions/174531/how-to-read-the-content-of-a-file-to-a-string-in-c). */
-    plaintextLength = lseek(plaintextFD, 0, SEEK_END);
-
-    // Repeat the above steps for our key to get its size.
-    keyFD = open(argv[2], O_RDONLY);
-    if (keyFD < 0)
-      error("Could not open the specified key file");
-    keyLength = lseek(keyFD, 0, SEEK_END);
-
-    // Print an error message and exit if the key is too short to use.
-    if (keyLength < plaintextLength) {
-      fprintf(stderr, "The provided key does not meet the minimum length requirements to "
-                      "encrypt your message.\nPlease provide a key with a length of %d or more.\n", plaintextLength - 1);
-      exit(1);
-    }
-
     memset(buffer, '\0', sizeof(buffer));
     fileToBuffer(&plaintextFD, buffer, &plaintextLength);
     close(plaintextFD);
-    validateString(buffer);
     sendStringToSocket(&socketFD, buffer);
 
     memset(buffer, '\0', sizeof(buffer));
     fileToBuffer(&keyFD, buffer, &keyLength);
     close(keyFD);
-    validateString(buffer);
     sendStringToSocket(&socketFD, buffer);
 
+    // Indicate to the server that both the plaintext and key have been sent
     sendStringToSocket(&socketFD, endOfMessage);
 
     // Get return message from server
@@ -179,11 +200,11 @@ void sendStringToSocket(const int* socketFD, const char message[]) {
 /* Takes a string then uses a loop starting from the beginning of the string to check one character at a time,
  * ensuring that the character is either a space or uppercase letter. Exits the loop at the end of the string
  * or exits the program when an invalid character is found that can't be sent to our daemon. */
-void validateString(const char buffer[]) {
+int isValidString(const char buffer[]) {
   for (int i = 0; i < strlen(buffer); i++) {
     if (!isupper(buffer[i]) && !isspace(buffer[i])) {
-      fprintf(stderr, "One or more invalid characters were detected.\n");
-      exit(1);
+      return(0);
     }
   }
+  return(1);
 }
