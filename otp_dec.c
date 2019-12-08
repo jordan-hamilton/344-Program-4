@@ -29,7 +29,7 @@ int main(int argc, char *argv[]) {
   // Check usage & args
   if (argc < 4) {
     fprintf(stderr, "Correct command format: %s CIPHERTEXT KEY PORT\n", argv[0]);
-    exit(1);
+    exit(2);
   }
 
   /* Open the specified ciphertext and key files, checking for existence and setting the length of each file in
@@ -80,7 +80,7 @@ int main(int argc, char *argv[]) {
 
   if (serverHostInfo == NULL) {
     fprintf(stderr, "An error occurred defining a server address.\n");
-    exit(0);
+    exit(2);
   }
   memcpy((char*) &serverAddress.sin_addr.s_addr, (char*) serverHostInfo->h_addr, serverHostInfo->h_length); // Copy in the address
 
@@ -107,7 +107,7 @@ int main(int argc, char *argv[]) {
     close(ciphertextFD);
     close(keyFD);
     fprintf(stderr, "A connection was made to an unknown destination.\n");
-    exit(1);
+    exit(2);
   } else {
     memset(buffer, '\0', sizeof(buffer));
     fileToBuffer(&ciphertextFD, buffer, &ciphertextLength);
@@ -137,7 +137,7 @@ int main(int argc, char *argv[]) {
 // Error function used for reporting issues
 void error(const char* msg) {
   perror(msg);
-  exit(0);
+  exit(2);
 }
 
 /* Takes a file descriptor pointer, a buffer to store the file's contents and a pointer to the length of the file,
