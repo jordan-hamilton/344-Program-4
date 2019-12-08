@@ -17,7 +17,7 @@ void validateString(const char[]);
 
 int main(int argc, char *argv[]) {
   int socketFD, portNumber;
-  int plaintextFD, plaintextLength, keyFD, keyLength;
+  int ciphertextFD, ciphertextLength, keyFD, keyLength;
   struct sockaddr_in serverAddress;
   struct hostent* serverHostInfo;
   int bufferSize = 100000, messageFragmentSize = 10;
@@ -27,7 +27,7 @@ int main(int argc, char *argv[]) {
 
   // Check usage & args
   if (argc < 4) {
-    fprintf(stderr, "Correct command format: %s PLAINTEXT KEY PORT\n", argv[0]);
+    fprintf(stderr, "Correct command format: %s CIPHERTEXT KEY PORT\n", argv[0]);
     exit(1);
   }
 
@@ -64,15 +64,14 @@ int main(int argc, char *argv[]) {
     fprintf(stderr, "A connection was made to an unknown destination.\n");
     exit(1);
   } else {
-
-    /* Open the specified plaintext and key files, checking for existence and setting the length of each file in
-     * bytes so we can verify the key we'll send to the daemon is long enough to encrypt the plaintext message. */
-    plaintextFD = open(argv[1], O_RDONLY);
-    if (plaintextFD < 0)
-      error("Could not open the specified plaintext file");
-    /* Set the length of the provided plaintext equal to the size of the file
+    /* Open the specified ciphertext and key files, checking for existence and setting the length of each file in
+     * bytes so we can verify the key we'll send to the daemon is long enough to decrypt the ciphertext message. */
+    ciphertextFD = open(argv[1], O_RDONLY);
+    if (ciphertextFD < 0)
+      error("Could not open the specified ciphertext file");
+    /* Set the length of the provided ciphertext equal to the size of the file
      * (source: https://stackoverflow.com/questions/174531/how-to-read-the-content-of-a-file-to-a-string-in-c). */
-    plaintextLength = lseek(plaintextFD, 0, SEEK_END);
+    ciphertextLength = lseek(ciphertextFD, 0, SEEK_END);
 
     // Repeat the above steps for our key to get its size.
     keyFD = open(argv[2], O_RDONLY);
@@ -81,15 +80,15 @@ int main(int argc, char *argv[]) {
     keyLength = lseek(keyFD, 0, SEEK_END);
 
     // Print an error message and exit if the key is too short to use.
-    if (keyLength < plaintextLength) {
+    if (keyLength < ciphertextLength) {
       fprintf(stderr, "The provided key does not meet the minimum length requirements to "
-                      "encrypt your message.\nPlease provide a key with a length of %d or more.\n", plaintextLength - 1);
+                      "decrypt your message.\nPlease provide a key with a length of %d or more.\n", ciphertextLength - 1);
       exit(1);
     }
 
     memset(buffer, '\0', sizeof(buffer));
-    fileToBuffer(&plaintextFD, buffer, &plaintextLength);
-    close(plaintextFD);
+    fileToBuffer(&ciphertextFD, buffer, &ciphertextLength);
+    close(ciphertextFD);
     validateString(buffer);
     sendStringToSocket(&socketFD, buffer);
 
@@ -104,10 +103,7 @@ int main(int argc, char *argv[]) {
     // Get return message from server
     memset(buffer, '\0', sizeof(buffer)); // Clear out the buffer again for reuse
     receiveStringFromSocket(&socketFD, buffer, messageFragment, &messageFragmentSize, endOfMessage);
-    /*
-    charsRead = recv(socketFD, buffer, sizeof(buffer) - 1, 0); // Read data from the socket, leaving \0 at end
-    if (charsRead < 0)
-      error("An error occurred reading from the socket");*/
+
     fprintf(stdout, "%s\n", buffer);
   }
 

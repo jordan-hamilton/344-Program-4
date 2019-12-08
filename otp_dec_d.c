@@ -7,7 +7,7 @@
 #include <sys/wait.h>
 #include <netinet/in.h>
 
-void encrypt(char[], unsigned long, const char[]);
+void decrypt(char[], unsigned long, const char[]);
 void error(const char*);
 void receiveStringFromSocket(const int*, char[], char[], const int*, const char[]);
 void sendStringToSocket(const int*, const char[]);
@@ -18,7 +18,7 @@ int main(int argc, char* argv[]) {
   struct sockaddr_in serverAddress, clientAddress;
   int bufferSize = 100000, messageFragmentSize = 10;
   char buffer[bufferSize], messageFragment[messageFragmentSize];
-  unsigned long encryptedMessageLength = 0;
+  unsigned long decryptedMessageLength = 0;
   char* keyRead = NULL;
   char connectionValidator[] = "<<";
   char endOfMessage[] = "||";
@@ -63,8 +63,10 @@ int main(int argc, char* argv[]) {
     // Fork a new process for the accepted connection if we didn't detect an error
     spawnPid = fork();
     switch (spawnPid) {
+
       case -1:
         error("An error occurred creating a process to handle a new connection");
+
       case 0:
         // Clear the buffer to receive a message from the client
         memset(buffer, '\0', bufferSize);
@@ -76,7 +78,7 @@ int main(int argc, char* argv[]) {
           // Send back an error message if the wrong program is trying to connect to our daemon
           sendStringToSocket(&establishedConnectionFD, invalidError);
         } else {
-          // Send back the connection validator string if the connection came from otp_enc
+          // Send back the connection validator string if the connection came from otp_dec
           sendStringToSocket(&establishedConnectionFD, "<<||");
         }
 
@@ -85,7 +87,7 @@ int main(int argc, char* argv[]) {
 
         receiveStringFromSocket(&establishedConnectionFD, buffer, messageFragment, &messageFragmentSize, endOfMessage);
 
-        /* Our key in the buffer begins after the newline character at the end of the plaintext message,
+        /* Our key in the buffer begins after the newline character at the end of the ciphertext message,
          * so we set keyRead to the index in the buffer directly after the new line, then exit our loop. */
         for (size_t i = 0; i < strlen(buffer); i++) {
           if (buffer[i] == '\n') {
@@ -95,16 +97,16 @@ int main(int argc, char* argv[]) {
         }
         /* Once we've found the location of the key, we know that the length of the message is the length of the full
          * buffer minus the length of the key and the newline character. */
-        encryptedMessageLength = strlen(buffer) - strlen(keyRead) - 1;
+        decryptedMessageLength = strlen(buffer) - strlen(keyRead) - 1;
 
-        /* Verify that the length of the key (minus the newline character) was long enough for us to encrypt the
-         * plaintext message. Otherwise, print an error. */
-        if ((strlen(keyRead) - 1) >= encryptedMessageLength) {
-          encrypt(buffer, encryptedMessageLength, keyRead);
+        /* Verify that the length of the key (minus the newline character) was long enough for us to decrypt the
+         * ciphertext message. Otherwise, print an error. */
+        if ((strlen(keyRead) - 1) >= decryptedMessageLength) {
+          decrypt(buffer, decryptedMessageLength, keyRead);
           sendStringToSocket(&establishedConnectionFD, buffer);
           sendStringToSocket(&establishedConnectionFD, endOfMessage);
         } else {
-          fprintf(stderr, "The provided key must have at least %lu characters to encrypt the provided message.\n", encryptedMessageLength);
+          fprintf(stderr, "The provided key must have at least %lu characters to decrypt the provided message.\n", decryptedMessageLength);
         }
 
         // Close the existing socket which is connected to the client
@@ -123,28 +125,31 @@ int main(int argc, char* argv[]) {
   return(0);
 }
 
-void encrypt(char message[], const unsigned long messageLength, const char key[]) {
-  int plaintextValue = -1, keyValue = -1, encryptedValue = -1;
+void decrypt(char message[], const unsigned long messageLength, const char key[]) {
+  int ciphertextValue = -1, keyValue = -1, decryptedValue = -1;
 
   for (size_t i = 0; i < messageLength; i++) {
-    /* Adjust spaces to equal the last value in our range, 26, so we can properly calculate the encrypted value with
+    /* Adjust spaces to equal the last value in our range, 26, so we can properly calculate the decrypted value with
      * modular arithmetic. */
     if ((int) message[i] == 32)
-      plaintextValue = 26;
+      ciphertextValue = 26;
     else
-      plaintextValue = (int) (message[i] - 65);
+      ciphertextValue = (int) (message[i] - 65);
 
     if ((int) key[i] == 32)
       keyValue = 26;
     else
       keyValue = (int) (key[i] - 65);
 
-    encryptedValue = (plaintextValue + keyValue) % 27;
+    decryptedValue = ciphertextValue - keyValue;
+    if (decryptedValue < 0)
+      decryptedValue += 27;
+    decryptedValue %= 27;
 
-    if (encryptedValue == 26)
+    if (decryptedValue == 26)
       message[i] = (char) 32;
     else
-      message[i] = (char) (encryptedValue + 65);
+      message[i] = (char) (decryptedValue + 65);
   }
   message[messageLength] = '\0';
 }
