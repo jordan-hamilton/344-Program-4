@@ -92,26 +92,6 @@ int main(int argc, char* argv[]) {
         // Prepare the buffer to receive the full message from the client
         memset(buffer, '\0', sizeof(buffer));
 
-        /*while (strstr(buffer, endOfMessage) == NULL) {
-          memset(dataFragment, '\0', sizeof(dataFragment));
-          charsRead = recv(establishedConnectionFD, dataFragment, sizeof(dataFragment) - 1, 0);
-
-          if (charsRead == 0)
-            break;
-          if (charsRead == -1)
-            break;
-
-          strcat(buffer, dataFragment);
-
-          printf("Received fragment: %s\nMessage so far: %s\n", dataFragment, buffer);
-        }
-
-         Find the terminal location using the method in the Network Clients video from Block 4
-         * then set a null terminator after the actual message contents end.
-        long terminalLocation = strstr(buffer, endOfMessage) - buffer;
-        buffer[terminalLocation] = '\0';
-        printf("Complete Message: \"%s\"\n", buffer);*/
-
         receiveStringFromSocket(&establishedConnectionFD, buffer, messageFragment, &messageFragmentSize, endOfMessage);
 
         /* Our key in the buffer begins after the newline character at the end of the plaintext message,
@@ -198,15 +178,12 @@ void receiveStringFromSocket(const int* establishedConnectionFD, char message[],
       break;
 
     strcat(message, messageFragment);
-
-    printf("Received fragment: %s\nMessage so far: %s\n", messageFragment, message);
   }
 
   /* Find the terminal location using the method in the Network Clients video from Block 4
    * then set a null terminator after the actual message contents end. */
   terminalLocation = strstr(message, endOfMessage) - message;
   message[terminalLocation] = '\0';
-  printf("Complete Message: \"%s\"\n", message);
 }
 
 /* Takes a pointer to a socket, followed by a string to send via that socket,

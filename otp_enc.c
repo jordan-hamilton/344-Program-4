@@ -133,7 +133,6 @@ void fileToBuffer(const int* fileDescriptor, char buffer[], const int* fileLengt
   bytesRead = read(*fileDescriptor, buffer, *fileLength);
   if (bytesRead < 0)
     error("An error occurred trying to read file contents");
-  printf("String: \"%s\"\nString Length: %lu\n", buffer, strlen(buffer));
 }
 
 void receiveStringFromSocket(const int* establishedConnectionFD, char message[], char messageFragment[], const int* messageFragmentSize, const char endOfMessage[]) {
@@ -150,15 +149,12 @@ void receiveStringFromSocket(const int* establishedConnectionFD, char message[],
       break;
 
     strcat(message, messageFragment);
-
-    printf("Received fragment: %s\nMessage so far: %s\n", messageFragment, message);
   }
 
   /* Find the terminal location using the method in the Network Clients video from Block 4
    * then set a null terminator after the actual message contents end. */
   terminalLocation = strstr(message, endOfMessage) - message;
   message[terminalLocation] = '\0';
-  printf("Complete Message: \"%s\"\n", message);
 }
 
 /* Takes a pointer to a socket, followed by a string to send via that socket,
