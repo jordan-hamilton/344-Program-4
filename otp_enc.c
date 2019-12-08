@@ -59,9 +59,6 @@ int main(int argc, char *argv[]) {
   // Get return message from server
   memset(buffer, '\0', sizeof(buffer)); // Clear out the buffer
   receiveStringFromSocket(&socketFD, buffer, messageFragment, &messageFragmentSize, endOfMessage);
-  /*charsRead = recv(socketFD, buffer, sizeof(buffer) - 1, 0); // Read data from the socket, leaving \0 at end
-  if (charsRead < 0)
-    error("An error occurred reading from the socket");*/
 
   if (strcmp(buffer, connectionValidator) != 0) {
     fprintf(stderr, "A connection was made to an unknown destination.\n");
@@ -107,10 +104,7 @@ int main(int argc, char *argv[]) {
     // Get return message from server
     memset(buffer, '\0', sizeof(buffer)); // Clear out the buffer again for reuse
     receiveStringFromSocket(&socketFD, buffer, messageFragment, &messageFragmentSize, endOfMessage);
-    /*
-    charsRead = recv(socketFD, buffer, sizeof(buffer) - 1, 0); // Read data from the socket, leaving \0 at end
-    if (charsRead < 0)
-      error("An error occurred reading from the socket");*/
+
     fprintf(stdout, "%s\n", buffer);
   }
 

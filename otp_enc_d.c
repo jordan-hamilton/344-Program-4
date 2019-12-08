@@ -71,22 +71,13 @@ int main(int argc, char* argv[]) {
 
         // Read the client's handshake message from the socket
         receiveStringFromSocket(&establishedConnectionFD, buffer, messageFragment, &messageFragmentSize, endOfMessage);
-        /*charsRead = recv(establishedConnectionFD, buffer, sizeof(buffer) - 1, 0);
-        if (charsRead < 0)
-          error("An error occurred reading from the socket");*/
 
         if (strcmp(buffer, connectionValidator) != 0) {
           // Send back an error message if the wrong program is trying to connect to our daemon
           sendStringToSocket(&establishedConnectionFD, invalidError);
-          /*charsRead = send(establishedConnectionFD, invalidError, sizeof(invalidError), 0);
-          if (charsRead < 0)
-            error("An error occurred writing to the socket");*/
         } else {
           // Send back the connection validator string if the connection came from otp_enc
           sendStringToSocket(&establishedConnectionFD, ">>||");
-          /*charsRead = send(establishedConnectionFD, connectionValidator, sizeof(connectionValidator), 0);
-          if (charsRead < 0)
-            error("An error occurred writing to the socket");*/
         }
 
         // Prepare the buffer to receive the full message from the client

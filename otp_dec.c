@@ -22,8 +22,8 @@ int main(int argc, char *argv[]) {
   struct hostent* serverHostInfo;
   int bufferSize = 100000, messageFragmentSize = 10;
   char buffer[bufferSize], messageFragment[messageFragmentSize];
-  char connectionValidator[] = ">>";
-  char endOfMessage[] = "||";
+  char connectionValidator[] = "<<";
+  char endOfMessage[] = "``";
 
   // Check usage & args
   if (argc < 4) {
@@ -54,14 +54,11 @@ int main(int argc, char *argv[]) {
     error("An error occurred connecting to the server");
 
   // Send message to server
-  sendStringToSocket(&socketFD, ">>||");
+  sendStringToSocket(&socketFD, "<<``");
 
   // Get return message from server
   memset(buffer, '\0', sizeof(buffer)); // Clear out the buffer
   receiveStringFromSocket(&socketFD, buffer, messageFragment, &messageFragmentSize, endOfMessage);
-  /*charsRead = recv(socketFD, buffer, sizeof(buffer) - 1, 0); // Read data from the socket, leaving \0 at end
-  if (charsRead < 0)
-    error("An error occurred reading from the socket");*/
 
   if (strcmp(buffer, connectionValidator) != 0) {
     fprintf(stderr, "A connection was made to an unknown destination.\n");
