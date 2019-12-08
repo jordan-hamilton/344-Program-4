@@ -11,16 +11,17 @@
 
 void error(const char* msg);
 void fileToBuffer(const int*, char[], const int*);
-void stringToSocket(const int*, const char[]);
+void receiveStringFromSocket(const int*, char[], char[], const int*, const char[]);
+void sendStringToSocket(const int*, const char[]);
 void validateString(const char[]);
 
 int main(int argc, char *argv[]) {
-  int socketFD, portNumber, charsRead;
+  int socketFD, portNumber;
   int plaintextFD, plaintextLength, keyFD, keyLength;
   struct sockaddr_in serverAddress;
   struct hostent* serverHostInfo;
-  int bufferSize = 100000;
-  char buffer[bufferSize];
+  int bufferSize = 100000, messageFragmentSize = 10;
+  char buffer[bufferSize], messageFragment[messageFragmentSize];
   char connectionValidator[] = ">>";
   char endOfMessage[] = "||";
 
@@ -53,13 +54,14 @@ int main(int argc, char *argv[]) {
     error("An error occurred connecting to the server");
 
   // Send message to server
-  stringToSocket(&socketFD, connectionValidator);
+  sendStringToSocket(&socketFD, ">>||");
 
   // Get return message from server
   memset(buffer, '\0', sizeof(buffer)); // Clear out the buffer
-  charsRead = recv(socketFD, buffer, sizeof(buffer) - 1, 0); // Read data from the socket, leaving \0 at end
+  receiveStringFromSocket(&socketFD, buffer, messageFragment, &messageFragmentSize, endOfMessage);
+  /*charsRead = recv(socketFD, buffer, sizeof(buffer) - 1, 0); // Read data from the socket, leaving \0 at end
   if (charsRead < 0)
-    error("An error occurred reading from the socket");
+    error("An error occurred reading from the socket");*/
 
   if (strcmp(buffer, connectionValidator) != 0) {
     fprintf(stderr, "A connection was made to an unknown destination.\n");
@@ -88,37 +90,28 @@ int main(int argc, char *argv[]) {
       exit(1);
     }
 
-    /* Clear out a buffer for reading one character at a time, then use a while loop starting from the beginning of the
-     * file to store one character at a time, ensuring that the character is either a space or uppercase letter. Exit
-     * the loop once read returns 0 at the end of the file.
-    memset(stringValidator, '\0', sizeof(stringValidator));
-    lseek(plaintextFD, 0, SEEK_SET);
-    while (read(plaintextFD, stringValidator, 1) != 0) {
-      if (!isupper(stringValidator[0]) && !isspace(stringValidator[0])) {
-        fprintf(stderr, "One or more invalid characters were supplied in the plaintext message: %c.\n", stringValidator[0]);
-        exit(1);
-      }
-    }*/
-
     memset(buffer, '\0', sizeof(buffer));
     fileToBuffer(&plaintextFD, buffer, &plaintextLength);
     close(plaintextFD);
     validateString(buffer);
-    stringToSocket(&socketFD, buffer);
+    sendStringToSocket(&socketFD, buffer);
 
     memset(buffer, '\0', sizeof(buffer));
     fileToBuffer(&keyFD, buffer, &keyLength);
     close(keyFD);
-    stringToSocket(&socketFD, buffer);
+    validateString(buffer);
+    sendStringToSocket(&socketFD, buffer);
 
-    stringToSocket(&socketFD, endOfMessage);
+    sendStringToSocket(&socketFD, endOfMessage);
 
-    /* Get return message from server
+    // Get return message from server
     memset(buffer, '\0', sizeof(buffer)); // Clear out the buffer again for reuse
+    receiveStringFromSocket(&socketFD, buffer, messageFragment, &messageFragmentSize, endOfMessage);
+    /*
     charsRead = recv(socketFD, buffer, sizeof(buffer) - 1, 0); // Read data from the socket, leaving \0 at end
     if (charsRead < 0)
-      error("An error occurred reading from the socket");
-    fprintf(stdout, "%s\n", buffer);*/
+      error("An error occurred reading from the socket");*/
+    fprintf(stdout, "%s\n", buffer);
   }
 
   close(socketFD); // Close the socket
@@ -143,9 +136,34 @@ void fileToBuffer(const int* fileDescriptor, char buffer[], const int* fileLengt
   printf("String: \"%s\"\nString Length: %lu\n", buffer, strlen(buffer));
 }
 
+void receiveStringFromSocket(const int* establishedConnectionFD, char message[], char messageFragment[], const int* messageFragmentSize, const char endOfMessage[]) {
+  int charsRead = -5;
+  long terminalLocation = -5;
+
+  while (strstr(message, endOfMessage) == NULL) {
+    memset(messageFragment, '\0', *messageFragmentSize);
+    charsRead = recv(*establishedConnectionFD, messageFragment, *messageFragmentSize - 1, 0);
+
+    if (charsRead == 0)
+      break;
+    if (charsRead == -1)
+      break;
+
+    strcat(message, messageFragment);
+
+    printf("Received fragment: %s\nMessage so far: %s\n", messageFragment, message);
+  }
+
+  /* Find the terminal location using the method in the Network Clients video from Block 4
+   * then set a null terminator after the actual message contents end. */
+  terminalLocation = strstr(message, endOfMessage) - message;
+  message[terminalLocation] = '\0';
+  printf("Complete Message: \"%s\"\n", message);
+}
+
 /* Takes a pointer to a socket, followed by a string to send via that socket,
  * then loops to ensure all the data in the string is sent. */
-void stringToSocket(const int* socketFD, const char message[]) {
+void sendStringToSocket(const int* socketFD, const char message[]) {
   int charsWritten;
   // Send message to server
   charsWritten = send(*socketFD, message, strlen(message), 0); // Write to the server
@@ -175,9 +193,8 @@ void stringToSocket(const int* socketFD, const char message[]) {
 void validateString(const char buffer[]) {
   for (int i = 0; i < strlen(buffer); i++) {
     if (!isupper(buffer[i]) && !isspace(buffer[i])) {
-      fprintf(stderr, "One or more invalid characters were supplied in the plaintext message.\n");
+      fprintf(stderr, "One or more invalid characters were detected.\n");
       exit(1);
     }
   }
-  fprintf(stdout, "Looks good!\n");
 }
