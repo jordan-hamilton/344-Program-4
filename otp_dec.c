@@ -61,6 +61,7 @@ int main(int argc, char *argv[]) {
   receiveStringFromSocket(&socketFD, buffer, messageFragment, &messageFragmentSize, endOfMessage);
 
   if (strcmp(buffer, connectionValidator) != 0) {
+    close(socketFD); // Close the socket
     fprintf(stderr, "A connection was made to an unknown destination.\n");
     exit(1);
   } else {
@@ -167,9 +168,8 @@ void sendStringToSocket(const int* socketFD, const char message[]) {
       error("An error occurred writing to the socket");
 
     // Exit the loop if no more characters are being sent to the server.
-    if (addedChars == 0) {
+    if (addedChars == 0)
       break;
-    }
 
     // Add the number of characters written in an iteration to the total number of characters sent in the message
     charsWritten += addedChars;

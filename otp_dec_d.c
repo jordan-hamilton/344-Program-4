@@ -77,6 +77,7 @@ int main(int argc, char* argv[]) {
         if (strcmp(buffer, connectionValidator) != 0) {
           // Send back an error message if the wrong program is trying to connect to our daemon
           sendStringToSocket(&establishedConnectionFD, invalidError);
+          sendStringToSocket(&establishedConnectionFD, endOfMessage);
         } else {
           // Send back the connection validator string if the connection came from otp_dec
           sendStringToSocket(&establishedConnectionFD, "<<||");
