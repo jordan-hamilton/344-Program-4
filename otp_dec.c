@@ -23,7 +23,7 @@ int main(int argc, char *argv[]) {
   int bufferSize = 100000, messageFragmentSize = 10;
   char buffer[bufferSize], messageFragment[messageFragmentSize];
   char connectionValidator[] = "<<";
-  char endOfMessage[] = "``";
+  char endOfMessage[] = "||";
 
   // Check usage & args
   if (argc < 4) {
@@ -54,7 +54,7 @@ int main(int argc, char *argv[]) {
     error("An error occurred connecting to the server");
 
   // Send message to server
-  sendStringToSocket(&socketFD, "<<``");
+  sendStringToSocket(&socketFD, "<<||");
 
   // Get return message from server
   memset(buffer, '\0', sizeof(buffer)); // Clear out the buffer

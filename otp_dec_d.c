@@ -21,7 +21,7 @@ int main(int argc, char* argv[]) {
   unsigned long encryptedMessageLength = 0;
   char* keyRead = NULL;
   char connectionValidator[] = "<<";
-  char endOfMessage[] = "``";
+  char endOfMessage[] = "||";
   char invalidError[] = "Received an incoming connection from an unknown source.";
   int exitMethod = -5;
   pid_t spawnPid = -5;
@@ -77,7 +77,7 @@ int main(int argc, char* argv[]) {
           sendStringToSocket(&establishedConnectionFD, invalidError);
         } else {
           // Send back the connection validator string if the connection came from otp_enc
-          sendStringToSocket(&establishedConnectionFD, "<<``");
+          sendStringToSocket(&establishedConnectionFD, "<<||");
         }
 
         // Prepare the buffer to receive the full message from the client
