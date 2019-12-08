@@ -16,7 +16,7 @@ int main(int argc, char* argv[]) {
 	int listenSocketFD, establishedConnectionFD, portNumber;
 	socklen_t sizeOfClientInfo;
   struct sockaddr_in serverAddress, clientAddress;
-  int bufferSize = 100000, messageFragmentSize = 10;
+  int bufferSize = 150000, messageFragmentSize = 10;
 	char buffer[bufferSize], messageFragment[messageFragmentSize];
   unsigned long encryptedMessageLength = 0;
 	char* keyRead = NULL;
