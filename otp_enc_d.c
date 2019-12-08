@@ -57,8 +57,6 @@ int main(int argc, char* argv[]) {
     sizeOfClientInfo = sizeof(clientAddress);
     // Accept a connection, blocking if one is not available until one connects
     establishedConnectionFD = accept(listenSocketFD, (struct sockaddr*) &clientAddress, &sizeOfClientInfo);
-    if (establishedConnectionFD < 0)
-      error("An error occurred accepting a connection");
 
     // Fork a new process for the accepted connection if we didn't detect an error
     spawnPid = fork();
@@ -66,6 +64,9 @@ int main(int argc, char* argv[]) {
       case -1:
         error("An error occurred creating a process to handle a new connection");
       case 0:
+        if (establishedConnectionFD < 0)
+          error("An error occurred accepting a connection");
+
         // Clear the buffer to receive a message from the client
         memset(buffer, '\0', bufferSize);
 
