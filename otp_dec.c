@@ -21,7 +21,7 @@ int main(int argc, char *argv[]) {
   int validText = 0, validKey = 0;
   struct sockaddr_in serverAddress;
   struct hostent* serverHostInfo;
-  int bufferSize = 100000, messageFragmentSize = 10;
+  int bufferSize = 150000, messageFragmentSize = 10;
   char buffer[bufferSize], messageFragment[messageFragmentSize];
   char connectionValidator[] = "<<";
   char endOfMessage[] = "||";
