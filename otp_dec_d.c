@@ -80,7 +80,7 @@ int main(int argc, char* argv[]) {
           sendStringToSocket(&establishedConnectionFD, invalidError);
           sendStringToSocket(&establishedConnectionFD, endOfMessage);
         } else {
-          // Send back the connection validator and end of message string if the connection came from otp_enc
+          // Send back the connection validator and end of message string if the connection came from otp_dec
           sendStringToSocket(&establishedConnectionFD, "<<||");
         }
 

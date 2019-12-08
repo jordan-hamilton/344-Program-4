@@ -50,20 +50,20 @@ int main(int argc, char *argv[]) {
   // Print an error message and exit if the key is too short to use.
   if (keyLength < ciphertextLength) {
     fprintf(stderr, "The provided key does not meet the minimum length requirements to "
-                    "encrypt your message.\nPlease provide a key with a length of %d or more.\n", ciphertextLength - 1);
+                    "decrypt your message.\nPlease provide a key with a length of %d or more.\n", ciphertextLength - 1);
     close(ciphertextFD);
     close(keyFD);
     exit(1);
   }
 
   /* Store the encrypted message in our buffer, then pass the buffer to isValidString to make sure that the message has
- * characters that can be encrypted */
+ * characters that can be decrypted */
   memset(buffer, '\0', sizeof(buffer));
   fileToBuffer(&ciphertextFD, buffer, &ciphertextLength);
   validText = isValidString(buffer);
 
   /* Store the key in our buffer, then pass the buffer to isValidString to make sure that the message has
-* characters that can be used to encrypt our message */
+* characters that can be used to decrypt our message */
   memset(buffer, '\0', sizeof(buffer));
   fileToBuffer(&keyFD, buffer, &keyLength);
   validKey = isValidString(buffer);
