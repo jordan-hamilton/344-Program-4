@@ -35,5 +35,7 @@ int main(int argc, char *argv[]) {
     fprintf(stderr, "Error: Missing a required argument.\nCorrect command format: %s KEYLENGTH\n", argv[0]);
     exit(1);
   }
+
+  return(0);
 }
 
