@@ -5,12 +5,6 @@ set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -std=gnu99 -Wall -pedantic")
 
 set(CMAKE_C_STANDARD 99)
 
-add_executable(client
-        client.c)
-
-add_executable(server
-        server.c)
-
 add_executable(otp_enc_d
         otp_enc_d.c)
 
